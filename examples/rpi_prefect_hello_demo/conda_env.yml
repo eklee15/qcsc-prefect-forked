@@ -1,0 +1,11 @@
+name: ek_rpi_demo
+dependencies:
+  - python=3.12
+  - gcc=11.2.0
+  - gxx=11.2.0
+  - numpy
+  - scipy
+  - pip
+  - pip:
+      - prefect
+      - cloudpickle
