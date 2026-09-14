@@ -34,6 +34,7 @@ def main() -> None:
         profile_name="hello-single-node",
         command_name="hello-demo",
         resource_class="cpu",
+        #resource_class="local",
         num_nodes=1,
         mpiprocs=1,
         ompthreads=1,

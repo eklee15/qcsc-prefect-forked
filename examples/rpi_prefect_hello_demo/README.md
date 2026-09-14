@@ -2,44 +2,56 @@
 
 This example demonstrates Prefect Blocks for SLURM job orchestration on an RPI cluster. It shows how to define command, execution, and HPC profile blocks, then submit and monitor real SLURM jobs through Prefect flows.
 
-## Quick Start (5 minutes)
+### Prerequisites
+* Run on a AiMOS (RPI Cluster) frontend/login node `dcsfen0[1-2]`
+* slurm commdnas (eg, `srun` and `sbatch`) are available in PATH
+* Prefect API is reachable
 
-### 1. Set up environment
-
+### Set up environment (one time setup)
 ```bash
-cd /shared/qcsc-prefect-forked
-uv sync --all-packages
+# Install Conda
+./install_conda.sh
+conda config --add channels conda-forge
+# Create your environment with [custom_env_name]
+conda env create -f conda_env.yml -n custom_env_name --force 
+```
+
+### 1. Enable your conda environment and start server
+```bash
+conda activate custom_env_name
+prefect server start --background
 ```
 
 ### 2. Register block types
-
 ```bash
-cd /shared/qcsc-prefect-forked
-uv run prefect block register -m qcsc_prefect_blocks.common.blocks
+prefect block register -m qcsc_prefect_blocks.common.blocks
 ```
 
 ### 3. Create demo blocks
 
 ```bash
-cd /shared/qcsc-prefect-forked
+export SLURM_ACCOUNT=qntm
+export SLURM_PARTITION=quantum
+python ~/barn/qcsc-prefect-forked/examples/rpi_prefect_hello_demo/create_blocks.py
+```
+
 export SLURM_ACCOUNT=root
 export SLURM_PARTITION=normal
-uv run python examples/rpi_prefect_hello_demo/create_blocks.py
-```
+python examples/rpi_prefect_hello_demo/create_blocks.py
 
 Expected output:
 ```
 Saved blocks: cmd-rpi-hello-demo, exec-rpi-hello-single, hpc-rpi
-  SLURM_ACCOUNT=root
-  SLURM_PARTITION=normal
-  executable=/shared/qcsc-prefect-forked/examples/rpi_prefect_hello_demo/hello_demo.sh
+  SLURM_ACCOUNT=qntm
+  SLURM_PARTITION=quantum
+  executable=/gpfs/u/barn/QNTM/QNTMnkle/qcsc-prefect-forked/examples/rpi_prefect_hello_demo/hello_demo.sh
 ```
 
 ### 4. Run the flow
 
 ```bash
-cd /shared/qcsc-prefect-forked
-uv run python -c "import asyncio; from examples.rpi_prefect_hello_demo.flow import rpi_prefect_block_hello_flow; result = asyncio.run(rpi_prefect_block_hello_flow()); print('Result:', result)"
+cd qcsc-prefect-forked/examples/rpi_prefect_hello_demo/
+python -c "import asyncio; from flow import rpi_prefect_block_hello_flow; result = asyncio.run(rpi_prefect_block_hello_flow()); print('Result:', result)"
 ```
 
 Expected output:
