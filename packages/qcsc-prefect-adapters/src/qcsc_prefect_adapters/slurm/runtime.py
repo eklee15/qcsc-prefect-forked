@@ -155,7 +155,7 @@ class SlurmRuntime:
                 stdout = await run_command(
                     "scontrol", "show", "job", "-o", job_id
                 )
-                print(f"DEBUG: scontrol output for job {job_id}:\n{stdout}")
+                self.logger.info(f"DEBUG: scontrol output for job {job_id}:\n{stdout}")
 
                 if stdout.strip():
                     # scontrol -o gives a single line of space-separated key=value pairs per job
