@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import logging
 
 
 class SubmitError(RuntimeError):
@@ -86,6 +87,9 @@ class SlurmRuntime:
     `qcsc_prefect_executor.slurm.run.run_slurm_job` or
     `qcsc_prefect_executor.from_blocks.run_job_from_blocks` instead.
     """
+    def __init__(self):
+        # Initialize the logger attribute for the class
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     async def submit(self, script_path: Path, *, cwd: Path | None = None) -> SubmitResult:
         """Submit a Slurm batch script with ``sbatch --parsable``.
@@ -147,7 +151,41 @@ class SlurmRuntime:
                     now = asyncio.get_running_loop().time()
                     if now - start > timeout_seconds:
                         raise WaitTimeout(f"timeout waiting for job_id={job_id}")
+                
+                stdout = await run_command(
+                    "scontrol", "show", "job", "-o", job_id
+                )
+                print(f"DEBUG: scontrol output for job {job_id}:\n{stdout}")
 
+                if stdout.strip():
+                    # scontrol -o gives a single line of space-separated key=value pairs per job
+                    for line in stdout.strip().split('\n'):
+                        # Parse key-value pairs (handling potential spaces inside values if any, 
+                        # though -o usually formats tightly)
+                        job_data = {}
+                        for token in line.split():
+                            if '=' in token:
+                                k, v = token.split('=', 1)
+                                job_data[k] = v
+
+                        # Map scontrol fields to your required dictionary keys
+                        # Note: scontrol uses 'JobId', 'JobState', 'ExitCode', 'RunTime', 'NumCPUs', 'NodeList'
+                        out = {
+                            'JobID': job_data.get('JobId', job_id),
+                            'State': job_data.get('JobState', 'UNKNOWN'),
+                            'ExitCode': job_data.get('ExitCode', '0:0'),
+                            'Elapsed': job_data.get('RunTime', '0:00'),
+                            'AllocCPUS': job_data.get('NumCPUs', job_data.get('AllocCPUS', '0')),
+                            'NodeList': job_data.get('NodeList', ''),
+                        }
+
+                        # Check if job finished
+                        final_states = ['BOOT_FAIL', 'COMPLETED', 'FAILED', 'CANCELLED', 'DEADLINE', 'TIMEOUT', 'NODE_FAIL', 'OUT_OF_MEMORY', 'PREEMPTED']
+                        if out['State'] in final_states:
+                            exit_code = out['ExitCode'].split(':')[0]
+                            self.logger.info(f"Job {job_id} finished with state {out['State']} and exit code {exit_code}")
+                            return out
+                
                 stdout = await run_command(
                     "sacct",
                     "-j",
