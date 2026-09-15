@@ -1,0 +1,42 @@
+# RPI (AiMOS) cluster / Slurm configuration for the BitCount demo.
+hpc_target = "slurm"
+
+# On Slurm, `project` is the account (#SBATCH --account) and
+# `queue` is the partition (#SBATCH --partition).
+project = "root"
+queue = "normal"
+
+work_dir = "/path/to/qcsc-prefect/work/prefect_bitcount_rpi"
+
+# Slurm launches MPI through srun on this cluster.
+launcher = "srun"
+walltime = "00:15:00"
+num_nodes = 2
+mpiprocs = 2
+ompthreads = 1
+shots = 100000
+
+# No modulefiles are needed here; the MPI wrappers are already on PATH.
+modules = []
+
+# QPU requested through the spank plugin as `#SBATCH --qpu=<name>`.
+# Must match a resource name in /etc/slurm/qrmi_config.json, and that resource
+# must be usable from the compute nodes. The `qiskit-runtime-service` entries
+# (ibm_kingston / ibm_fez / ibm_marrakesh) work here; the `test_heron` and
+# `test_eagle` direct-access entries fail to acquire because their
+# QRMI_IBM_QS_* endpoint is not provisioned on this cluster.
+slurm_qpu = "ibm_kingston"
+
+# Optional Slurm resource requests.
+# slurm_memory = "16G"
+# slurm_ntasks = 4
+
+# Block/variable names created for this target (these are the defaults
+# when hpc_target = "slurm"):
+# command_block_name = "cmd-bitcount-hist"
+# execution_profile_block_name = "exec-bitcount-rpi"
+# hpc_profile_block_name = "hpc-rpi-bitcount"
+# options_variable_name = "rpi-bitcount-options"
+
+# Defaults to <example_dir>/bin/get_counts_hist, built by ./build_on_rpi.sh.
+# optimized_executable = "/path/to/qcsc-prefect/examples/prefect_bitcount_demo_rpi/bin/get_counts_hist"
