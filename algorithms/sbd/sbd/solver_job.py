@@ -67,7 +67,25 @@ def _build_solver_args(solver: "SBDSolverJob") -> list[str]:
         "--dump_matrix_form_wf",
         "matrixformwf.txt",
         "--rdm",
-        "0",
+        str(solver.sbd_rdm),
+        "--method",
+        str(solver.sbd_method),
+        "--init",
+        str(solver.sbd_init),
+        "--shuffle",
+        str(solver.sbd_shuffle),
+        "--bit_length",
+        str(solver.sbd_bit_length),
+        "--savename",
+        solver.wf_savename,
+        "--carryover_type",
+        str(solver.sbd_carryover_type),
+        "--do_redist_det",
+        str(solver.sbd_do_redist_det),
+        "--b_comm_size",
+        str(solver.sbd_b_comm_size),
+        "--t_comm_size",
+        str(solver.sbd_t_comm_size),
     ]
     if solver.solver_mode == "gpu":
         args.extend(["--adetfile", "AlphaDets.bin", "--carryoverfile", "carryover.txt"])
@@ -227,6 +245,109 @@ class SBDSolverJob(Block):
         default="cpu",
         title="Solver Mode",
         description="SBD execution mode.",
+    )
+
+    # --- SBD solver configuration (maps to sbd_* keys in the YAML config) ---
+
+    sbd_solver: Literal["tpb", "gdb"] = Field(
+        default="tpb",
+        title="SBD Solver",
+        description="String-product (tpb) or graph-decomposed (gdb) subspace.",
+    )
+    wf_savename: str = Field(
+        default="wf",
+        title="Wavefunction Save Name",
+        description="Output wavefunction savename passed to --savename.",
+    )
+    sbd_nodes: int = Field(
+        default=1,
+        gt=0,
+        title="SBD Nodes",
+        description="Number of compute nodes for the SBD job.",
+    )
+    sbd_proc_per_node: int = Field(
+        default=1,
+        gt=0,
+        title="SBD Processes Per Node",
+        description="MPI ranks per node.",
+    )
+    sbd_threads: int = Field(
+        default=1,
+        gt=0,
+        title="SBD Threads",
+        description="OpenMP threads per rank (OMP_NUM_THREADS).",
+    )
+    sbd_method: int = Field(
+        default=0,
+        ge=0,
+        title="SBD Method",
+        description="Diagonalization method index passed to --method.",
+    )
+    sbd_init: int = Field(
+        default=0,
+        ge=0,
+        title="SBD Init",
+        description="Initialisation mode passed to --init.",
+    )
+    sbd_shuffle: int = Field(
+        default=0,
+        ge=0,
+        title="SBD Shuffle",
+        description="Determinant shuffle flag passed to --shuffle.",
+    )
+    sbd_rdm: int = Field(
+        default=1,
+        ge=0,
+        title="SBD RDM",
+        description="Whether to compute 1-RDMs for occupancies (0 or 1).",
+    )
+    sbd_bit_length: int = Field(
+        default=20,
+        gt=0,
+        title="SBD Bit Length",
+        description="Bits per stored word of a determinant (--bit_length).",
+    )
+
+    # GDB-specific options
+    sbd_do_redist_det: int = Field(
+        default=1,
+        ge=0,
+        title="SBD Do Redist Det",
+        description="GDB: redistribute determinants flag.",
+    )
+    sbd_b_comm_size: int = Field(
+        default=1,
+        gt=0,
+        title="SBD B Comm Size",
+        description="GDB: b communicator size.",
+    )
+    sbd_t_comm_size: int = Field(
+        default=1,
+        gt=0,
+        title="SBD T Comm Size",
+        description="GDB: t communicator size.",
+    )
+
+    # TPB-specific options
+    sbd_carryover_type: int = Field(
+        default=0,
+        ge=0,
+        title="SBD Carryover Type",
+        description="TPB: carryover selection strategy.",
+    )
+
+    # Davidson options
+    davidson_iterations: int = Field(
+        default=5,
+        gt=0,
+        title="Davidson Iterations",
+        description="Number of Davidson iterations.",
+    )
+    davidson_tolerance: float = Field(
+        default=1e-6,
+        gt=0.0,
+        title="Davidson Tolerance",
+        description="Convergence threshold for Davidson diagonalization.",
     )
 
     async def run(

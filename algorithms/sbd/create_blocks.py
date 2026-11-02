@@ -91,6 +91,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--tolerance", type=float)
     parser.add_argument("--carryover-ratio", type=float)
     parser.add_argument("--solver-mode", choices=["cpu", "gpu"])
+    parser.add_argument("--fcidump-filename")
     parser.add_argument("--shots", type=int)
     parser.add_argument(
         "--sqd-options-json",
@@ -243,6 +244,7 @@ def _env_values() -> dict[str, Any]:
         "tolerance": env_float("SBD_TOLERANCE"),
         "carryover_ratio": env_float("SBD_CARRYOVER_RATIO"),
         "solver_mode": env_first_str("SBD_SOLVER_MODE"),
+        "fcidump_filename": env_first_str("SBD_FCIDUMP_FILENAME"),
         "shots": env_int("SBD_SHOTS"),
         "sqd_options_json": env_first_str("SBD_OPTIONS_JSON"),
     }
@@ -405,6 +407,14 @@ def main() -> None:
         _pick_value(args.solver_mode, config.get("solver_mode"), env.get("solver_mode"), "cpu")
     ).strip()
     resource_class = "gpu" if solver_mode == "gpu" else "cpu"
+    fcidump_filename = str(
+        _pick_value(
+            args.fcidump_filename,
+            config.get("fcidump_filename"),
+            env.get("fcidump_filename"),
+            "fcidump.txt",
+        )
+    ).strip()
     user_args = _normalize_str_list(config.get("user_args")) or []
     if is_miyabi and solver_mode == "gpu":
         if "unset OMPI_MCA_mca_base_env_list" not in pre_commands:
@@ -567,6 +577,7 @@ def main() -> None:
         tolerance=tolerance,
         carryover_ratio=carryover_ratio,
         solver_mode=solver_mode,
+        fcidump_filename=fcidump_filename,
         user_args=user_args,
     ).save(solver_block_name, overwrite=True)
 
