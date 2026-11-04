@@ -361,6 +361,7 @@ def main() -> None:
     # the `diag` binary) in every Prefect run by default. Override from the
     # TOML `[environments]` table (e.g. SBD_TRACE = "0") to turn it off.
     environments.setdefault("SBD_TRACE", "1")
+    environments.setdefault("OMP_NUM_THREADS", "1")
 
     fugaku_gfscache = str(
         _pick_value(
