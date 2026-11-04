@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include "sbd/sbd.h"
+#include "sbd/framework/hang_trace.h"
 #include "mpi.h"
 
 
@@ -43,13 +44,18 @@ int main(int argc, char * argv[]) {
 
   std::cout.precision(16);
 
+  SBD_TRACE("main: MPI_Init done (mpi_size=" << mpi_size << ", provided=" << provided << ")");
+
   /**
      load fcidump data
    */
+  SBD_TRACE("main: LoadFCIDump begin");
   if( mpi_rank == 0 ) {
     fcidump = sbd::LoadFCIDump(fcidumpfile);
   }
+  SBD_TRACE("main: LoadFCIDump done, MpiBcast(fcidump) begin");
   sbd::MpiBcast(fcidump,0,comm);
+  SBD_TRACE("main: MpiBcast(fcidump) done");
 
   for(const auto & [key,value] : fcidump.header) {
     if( key == std::string("NORB") ) {
@@ -65,19 +71,24 @@ int main(int argc, char * argv[]) {
    */
   std::vector<std::vector<size_t>> adet;
   std::vector<std::vector<size_t>> bdet;
+  SBD_TRACE("main: LoadAlphaDets begin");
   if( mpi_rank == 0 ) {
     sbd::LoadAlphaDets(adetfile,adet,sbd_data.bit_length,L);
     std::cout << "Loaded " << adet.size() << " alpha determinants." << std::endl;
   }
 
+  SBD_TRACE("main: LoadAlphaDets done, MpiBcast(adet) begin");
   sbd::MpiBcast(adet,0,comm);
   bdet = adet;
+  SBD_TRACE("main: MpiBcast(adet) done (adet.size=" << adet.size() << ")");
 
   /**
      sample-based diagonalization using data for fcidump, adet, bdet.
    */
+  SBD_TRACE("main: tpb::diag begin");
   sbd::tpb::diag(comm,sbd_data,fcidump,adet,bdet,loadname,savename,
               energy,density,co_adet,co_bdet,one_p_rdm,two_p_rdm);
+  SBD_TRACE("main: tpb::diag done");
 
   if( mpi_rank == 0 ) {
     std::cout << "Davidson energy: " << energy << std::endl;
@@ -119,6 +130,8 @@ int main(int argc, char * argv[]) {
      Finalize
   */
 
+  SBD_TRACE("main: output written, MPI_Finalize begin");
   MPI_Finalize();
+  SBD_TRACE("main: MPI_Finalize done");
   return 0;
 }
