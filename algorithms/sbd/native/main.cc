@@ -132,6 +132,5 @@ int main(int argc, char * argv[]) {
 
   SBD_TRACE("main: output written, MPI_Finalize begin");
   MPI_Finalize();
-  SBD_TRACE("main: MPI_Finalize done");
   return 0;
 }

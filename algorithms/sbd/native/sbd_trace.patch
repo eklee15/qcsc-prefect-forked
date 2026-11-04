@@ -218,10 +218,10 @@ index 5ce5c31..1aa6cab 100644
      /**
 diff --git a/include/sbd/framework/hang_trace.h b/include/sbd/framework/hang_trace.h
 new file mode 100644
-index 0000000..996daf0
+index 0000000..ca3186e
 --- /dev/null
 +++ b/include/sbd/framework/hang_trace.h
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,89 @@
 +/// This is a part of sbd
 +/**
 +@file sbd/framework/hang_trace.h
@@ -259,11 +259,16 @@ index 0000000..996daf0
 +    return std::chrono::duration<double>(now - t0).count();
 +  }
 +
-+  /// World rank, or -1 if MPI is not initialized yet.
++  /// World rank, or -1 if MPI is not usable (not yet initialized, or already
++  /// finalized). Querying the rank outside this window is disallowed by the
++  /// MPI standard and aborts the job, so guard both ends.
 +  inline int trace_world_rank() {
 +    int initialized = 0;
 +    MPI_Initialized(&initialized);
 +    if (!initialized) return -1;
++    int finalized = 0;
++    MPI_Finalized(&finalized);
++    if (finalized) return -1;
 +    int rank = -1;
 +    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 +    return rank;
