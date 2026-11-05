@@ -1,0 +1,50 @@
+# Required for Slurm
+hpc_target = "slurm" 
+project = "QCSC"
+queue = "quantum"
+work_dir = "/gpfs/u/scratch/QCSC/shared/ek/qcsc-prefect-forked/sbd_jobs"
+sbd_executable = "/gpfs/u/scratch/QCSC/shared/ek/qcsc-prefect-forked/algorithms/sbd/native/diag"
+#sbd_executable = "/gpfs/u/home/QCSC/QCSCrsdd/scratch-shared/osama/sbd/apps/chemistry_gdb_selected_basis_diagonalization/diag"
+
+# Optional execution profile
+launcher = "srun"
+walltime = "00:55:00"
+num_nodes = 1
+mpiprocs = 1
+modules = []
+mpi_options = []
+
+# Optional block/variable names
+command_block_name = "cmd-sbd-diag"
+execution_profile_block_name = "exec-sbd-mpi"     # Default: "exec-sbd-slurm"
+hpc_profile_block_name = "hpc-slurm-sbd"          # Default: "hpc-slurm-sbd"
+solver_block_name = "davidson-solver"             # Default: "davidson-solver-slurm"
+options_variable_name = "sqd_options"
+
+# Optional solver script / metrics naming
+# script_filename = "sbd_solver.slurm"            # Slurm default
+# metrics_artifact_key = "slurm-sbd-metrics"      # Slurm default
+
+# Optional solver parameters
+task_comm_size = 1
+adet_comm_size = 1
+bdet_comm_size = 1
+# Fast preset for low-accuracy runs
+block = 2
+iteration = 1
+tolerance = 0.01
+carryover_ratio = 0.1
+solver_mode = "cpu"
+
+
+# Extra args appended verbatim to the diag command line.
+user_args = ["--adetfile", "AlphaDets.bin"]
+
+# Optional runtime options variable
+# Default if omitted: {"params":{"shots":50000}} for Slurm
+
+# Environment variables exported in the Slurm job (before srun).
+# Cap OpenMP threads per MPI rank so concurrent diag ranks do not
+# oversubscribe the node (POWER9 = 160 HW threads; several ranks share it).
+[environments]
+OMP_NUM_THREADS = "1"
