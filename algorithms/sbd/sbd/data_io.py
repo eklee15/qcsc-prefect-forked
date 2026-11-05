@@ -19,6 +19,7 @@ from prefect.client.schemas.filters import (
     ArtifactFilterKey,
     FlowRunFilter,
     FlowRunFilterId,
+    TaskRunFilter,
 )
 from prefect.client.schemas.sorting import ArtifactSort
 from prefect.context import FlowRunContext
@@ -113,8 +114,9 @@ def extend_table_artifact(
     ctx_flow = FlowRunContext.get()
 
     with get_client(sync_client=True) as client:
-        # Pass explicit sort/limit: some Prefect server versions reject a
-        # filter body that serializes limit/offset/sort as null (422).
+        # The Prefect 3.8.x sync client serializes task_runs/limit/offset/sort
+        # into the request body unconditionally, and the server rejects them
+        # when null (HTTP 422). Pass every field as a valid (non-null) value.
         artifacts = client.read_artifacts(
             artifact_filter=ArtifactFilter(
                 key=ArtifactFilterKey(any_=[artifact_key]),
@@ -122,8 +124,10 @@ def extend_table_artifact(
             flow_run_filter=FlowRunFilter(
                 id=FlowRunFilterId(any_=[ctx_flow.flow_run.id]),
             ),
+            task_run_filter=TaskRunFilter(),
             sort=ArtifactSort.UPDATED_DESC,
             limit=100,
+            offset=0,
         )
         artifact = artifacts[index]
         current_data = json.loads(artifact.data)
