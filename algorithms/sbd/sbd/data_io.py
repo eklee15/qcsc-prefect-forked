@@ -3,25 +3,14 @@
 # Author: Naoki Kanazawa (knzwnao@jp.ibm.com)
 
 import io
-import json
 import os
 import uuid
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 import numpy as np
-from prefect.artifacts import TableArtifact
-from prefect.client.orchestration import get_client
-from prefect.client.schemas.actions import ArtifactUpdate
-from prefect.client.schemas.filters import (
-    ArtifactFilter,
-    ArtifactFilterKey,
-    FlowRunFilter,
-    FlowRunFilterId,
-    TaskRunFilter,
-)
-from prefect.client.schemas.sorting import ArtifactSort
+from prefect.artifacts import create_table_artifact
 from prefect.context import FlowRunContext
 from prefect.settings import get_current_settings
 
@@ -111,33 +100,23 @@ def extend_table_artifact(
     new_table: list[dict[str, Any]] | list[list[Any]],
     index: int = 0,
 ) -> UUID:
-    ctx_flow = FlowRunContext.get()
+    """Record a telemetry table under ``artifact_key``.
 
-    with get_client(sync_client=True) as client:
-        # The Prefect 3.8.x sync client serializes task_runs/limit/offset/sort
-        # into the request body unconditionally, and the server rejects them
-        # when null (HTTP 422). Pass every field as a valid (non-null) value.
-        artifacts = client.read_artifacts(
-            artifact_filter=ArtifactFilter(
-                key=ArtifactFilterKey(any_=[artifact_key]),
-            ),
-            flow_run_filter=FlowRunFilter(
-                id=FlowRunFilterId(any_=[ctx_flow.flow_run.id]),
-            ),
-            task_run_filter=TaskRunFilter(),
-            sort=ArtifactSort.UPDATED_DESC,
-            limit=100,
-            offset=0,
-        )
-        artifact = artifacts[index]
-        current_data = json.loads(artifact.data)
+    Historically this read the existing artifact and appended to it
+    (read-modify-update). That is unreliable against the Prefect server in
+    use: a just-created artifact is not immediately returned by
+    ``read_artifacts`` (eventual consistency), so the read came back empty and
+    ``artifacts[index]`` raised ``IndexError``.
 
-        assert isinstance(current_data, list)
-        current_data.extend(new_table)
+    Instead, create a new version of the artifact under the same key on each
+    call. Prefect keys are versioned, so repeated creates accumulate as
+    versions (the UI shows the latest), and nothing depends on reading an
+    artifact back immediately after writing it.
 
-        update = ArtifactUpdate(data=cast(str, TableArtifact(table=current_data).format()))
-        client.update_artifact(
-            artifact_id=artifact.id,
-            artifact=update,
-        )
-    return artifact.id
+    ``index`` is retained for backwards compatibility and is unused.
+    """
+    return create_table_artifact(
+        table=list(new_table),
+        key=artifact_key,
+        description="SQD intermediate data.",
+    )
