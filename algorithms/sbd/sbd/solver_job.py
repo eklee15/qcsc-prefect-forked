@@ -118,13 +118,45 @@ def _read_files(
     norb: int,
 ) -> SBDResult:
     logger = get_run_logger()
-    logger.debug("Reading occ_a.txt and occ_b.txt file.")
-    occa = np.atleast_1d(np.loadtxt(work_dir / "occ_a.txt", dtype=np.float64))
-    occb = np.atleast_1d(np.loadtxt(work_dir / "occ_b.txt", dtype=np.float64))
+
+    def _read_occupations(spin: str) -> np.ndarray:
+        """Read per-orbital occupations for one spin.
+
+        Prefer the flow-native ``occ_{spin}.txt`` (one value per orbital).
+        Fall back to the standalone solver's ``1pRDM_{spin}.txt`` (a full
+        1-particle RDM written as ``i j value`` rows), whose diagonal
+        (i == j) holds the occupations.
+        """
+        occ_path = work_dir / f"occ_{spin}.txt"
+        if occ_path.exists():
+            logger.debug("Reading %s.", occ_path.name)
+            return np.atleast_1d(np.loadtxt(occ_path, dtype=np.float64))
+        rdm_path = work_dir / f"1pRDM_{spin}.txt"
+        if rdm_path.exists():
+            logger.debug("occ_%s.txt missing; deriving from %s diagonal.", spin, rdm_path.name)
+            occ = np.zeros(norb, dtype=np.float64)
+            with rdm_path.open() as fh:
+                for line in fh:
+                    parts = line.split()
+                    if len(parts) < 3:
+                        continue
+                    i, j = int(parts[0]), int(parts[1])
+                    if i == j and 0 <= i < norb:
+                        occ[i] = float(parts[2])
+            return occ
+        raise FileNotFoundError(f"{occ_path} not found (and no 1pRDM_{spin}.txt fallback).")
+
+    occa = _read_occupations("a")
+    occb = _read_occupations("b")
 
     logger.debug("Reading carryover.bin file.")
     bytes_per_config = (norb + 7) // 8
-    data = np.fromfile(work_dir / "carryover.bin", dtype=np.uint8)
+    carryover_path = work_dir / "carryover.bin"
+    data = (
+        np.fromfile(carryover_path, dtype=np.uint8)
+        if carryover_path.exists()
+        else np.empty(0, dtype=np.uint8)
+    )
     if data.size == 0:
         carryover = np.empty((0, norb), dtype=bool)
     else:
@@ -136,8 +168,16 @@ def _read_files(
         carryover = np.unpackbits(data, bitorder="big").reshape(-1, bytes_per_config * 8)[:, :norb]
         carryover = carryover.astype(bool)
 
-    logger.debug("Reading davidson_energy.txt file.")
-    energy = float(np.loadtxt(work_dir / "davidson_energy.txt").item())
+    energy_path = work_dir / "davidson_energy.txt"
+    if energy_path.exists():
+        logger.debug("Reading davidson_energy.txt file.")
+        energy = float(np.loadtxt(energy_path).item())
+    else:
+        # Standalone solver writes energies.txt: one-body, two-body, total.
+        energies_path = work_dir / "energies.txt"
+        logger.debug("davidson_energy.txt missing; reading total energy from energies.txt.")
+        vals = np.atleast_1d(np.loadtxt(energies_path, dtype=np.float64))
+        energy = float(vals[-1])
 
     return SBDResult(
         energy=energy,
