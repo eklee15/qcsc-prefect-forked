@@ -25,7 +25,7 @@ from qiskit_addon_sqd.counts import bit_array_to_arrays, generate_bit_array_unif
 
 from .data_io import save_ndarray
 from .flow_params import CircuitParameters
-from .lucj import create_lucj_circuit
+from .lucj_hl import create_lucj_circuit
 from .np_type_extension import (
     NpStrict1DArrayLL,
     NpStrict2DArrayBool,
@@ -135,36 +135,47 @@ def walker_sqd(
                 perf_counter() - target_start,
             )
 
-            logger.info(
-                "Searching ISA layout for backend %s "
-                "(max_iterations=%s, swap_trials=%s, layout_trials=%s).",
-                resource_name,
-                circuit_params.sabre_max_iterations,
-                circuit_params.sabre_swap_trials,
-                circuit_params.sabre_layout_trials,
-            )
-            layout = find_optimal_layout(
-                test_circuit=vir_circuit,
-                target=target,
-                optimization_level=circuit_params.optimization_level,
-                max_iterations=circuit_params.sabre_max_iterations,
-                swap_trials=circuit_params.sabre_swap_trials,
-                layout_trials=circuit_params.sabre_layout_trials,
-            )
+            if vir_circuit.layout is not None:
+                # The circuit is already an ISA circuit for this backend (e.g.
+                # loaded pre-transpiled from QPY by lucj_hl). Re-running SABRE
+                # layout + transpilation would be wrong, so submit it as-is.
+                logger.info(
+                    "Circuit already transpiled (has a layout); "
+                    "skipping SABRE layout search and transpilation for %s.",
+                    resource_name,
+                )
+                isa_circuit = vir_circuit
+            else:
+                logger.info(
+                    "Searching ISA layout for backend %s "
+                    "(max_iterations=%s, swap_trials=%s, layout_trials=%s).",
+                    resource_name,
+                    circuit_params.sabre_max_iterations,
+                    circuit_params.sabre_swap_trials,
+                    circuit_params.sabre_layout_trials,
+                )
+                layout = find_optimal_layout(
+                    test_circuit=vir_circuit,
+                    target=target,
+                    optimization_level=circuit_params.optimization_level,
+                    max_iterations=circuit_params.sabre_max_iterations,
+                    swap_trials=circuit_params.sabre_swap_trials,
+                    layout_trials=circuit_params.sabre_layout_trials,
+                )
 
-            logger.info("Transpiling ISA circuit for backend %s.", resource_name)
-            transpile_start = perf_counter()
-            isa_circuit = transpile_circuit(
-                circuit=vir_circuit,
-                target=target,
-                layout=layout,
-                optimization_level=circuit_params.optimization_level,
-            )
-            logger.info(
-                "Completed ISA transpilation for %s in %.2fs.",
-                resource_name,
-                perf_counter() - transpile_start,
-            )
+                logger.info("Transpiling ISA circuit for backend %s.", resource_name)
+                transpile_start = perf_counter()
+                isa_circuit = transpile_circuit(
+                    circuit=vir_circuit,
+                    target=target,
+                    layout=layout,
+                    optimization_level=circuit_params.optimization_level,
+                )
+                logger.info(
+                    "Completed ISA transpilation for %s in %.2fs.",
+                    resource_name,
+                    perf_counter() - transpile_start,
+                )
 
             try:
                 pub_result = runtime.sampler(
