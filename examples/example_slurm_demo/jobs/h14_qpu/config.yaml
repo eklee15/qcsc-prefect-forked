@@ -1,0 +1,61 @@
+# Job config for the example_slurm_demo sampling run: build the H14 Hamiltonian
+# and LUCJ circuit, then sample it on ibm_rensselaer through the QRMI Slurm
+# plugin and keep the counts. Selected by HL_JOB_NAME (default h14_qpu); see
+# run_sampling.sh and the README.
+#
+# Only the Hamiltonian, backend, circuit and sample keys are read by this demo
+# (build_hamiltonian.py, make_circuit.py, sample_circuit.py); the full
+# closed-loop SQD/SBD settings are not part of the sampling path.
+
+# Hamiltonian
+# Number of hydrogen atoms in the chain (one electron and one sto-6g orbital each)
+n_atoms: 14
+# Spacing between neighbouring atoms, in Angstrom. The data file
+# h14_sto-6g_14e14o_d-0.95252 was built with 0.9525186.
+bond_length: 0.9525186
+# Axis the chain lies along: x, y or z
+chain_axis: "x"
+basis: "sto-6g"
+# 2S = n_alpha - n_beta
+spin: 0
+# Point group passed to pyscf; null disables symmetry
+symmetry: "Dooh"
+# Indices of the MOs to keep in the active space; null keeps all of them
+active_space: null
+
+# Backend
+# qrmi: the QPU named by backend_name, reached through the Slurm QRMI plugin.
+# Only works inside a quantum-partition job started with --qpu=<backend_name>
+# (run_sampling.sh); the circuit is transpiled against the target QRMI reports
+# at that moment.
+backend_type: "qrmi"
+backend_name: "ibm_rensselaer"
+
+# LUCJ ansatz
+n_reps: 1
+# Compressing the CCSD amplitudes needs jax, which does not exist for AiMOS (ppc64le)
+optimize_ucj: False
+
+# Transpilation
+connectivity: "square"
+optimization_level: 3
+two_qubit_error_threshold: 1.0
+readout_error_threshold: 0.1
+
+# Random seed (transpiler + generic backend)
+random_seed: 42
+
+# Path to the molecular data files
+mol_data: "mol_data/h14_sto-6g_14e14o_d-0.95252.npz"
+fci_dump: "mol_data/h14_sto-6g_14e14o_d-0.95252.fcidump"
+
+# Path to the transpiled circuit
+circuit_data: "circuit/h14_sto-6g_14e14o_d-0.95252.qpy"
+
+# Shots for the QPU run
+qpu_shots: 100000
+
+# Where the counts land. sample_circuit.py writes the QPU counts to
+# <sample_data>/<sample_files[0]>. Set sample_data to jobs/<job name>/samples.
+sample_data: "jobs/h14_qpu/samples"
+sample_files: ["samples.json"]
