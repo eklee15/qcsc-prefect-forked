@@ -1,0 +1,7 @@
+# Runtime output: rendered sbatch scripts + per-step job logs
+work/
+# Compute scratch
+.tmp/
+__pycache__/
+# Sampling results produced by the flow
+jobs/*/samples/
