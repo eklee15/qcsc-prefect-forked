@@ -40,11 +40,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from prefect import flow, task
-from prefect.logging import get_run_logger
-from qcsc_prefect_executor.from_blocks import run_job_from_blocks
+# Target the running Prefect server (default: the local server on :4223) rather
+# than ephemeral mode. Set before importing prefect so its settings pick it up.
+# Override PREFECT_API_URL in the environment to point elsewhere.
+os.environ.setdefault("PREFECT_API_URL", "http://127.0.0.1:4223/api")
 
-import create_blocks as blocks
+from prefect import flow, task  # noqa: E402
+from prefect.logging import get_run_logger  # noqa: E402
+from qcsc_prefect_executor.from_blocks import run_job_from_blocks  # noqa: E402
+
+import create_blocks as blocks  # noqa: E402
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
 JOB_NAME = os.getenv("HL_JOB_NAME", "h14_qpu")

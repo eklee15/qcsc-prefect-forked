@@ -24,7 +24,12 @@ import inspect
 import os
 from pathlib import Path
 
-from qcsc_prefect_blocks.common.blocks import (
+# Target the running Prefect server (default: the local server on :4223) rather
+# than ephemeral mode. Set before importing prefect so its settings pick it up.
+# Override PREFECT_API_URL in the environment to point elsewhere.
+os.environ.setdefault("PREFECT_API_URL", "http://127.0.0.1:4223/api")
+
+from qcsc_prefect_blocks.common.blocks import (  # noqa: E402
     CommandBlock,
     ExecutionProfileBlock,
     HPCProfileBlock,

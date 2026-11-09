@@ -64,19 +64,21 @@ credentials to the job — no token needed.
 
 ## Run it
 
-From this directory, with the **orchestration** interpreter (rpi_demo). Prefect
-needs a place to store blocks; the simplest is ephemeral mode with a fast,
-node-local `PREFECT_HOME` (the GPFS home is too slow for the ephemeral server):
+From this directory, with the **orchestration** interpreter (rpi_demo). The flow
+talks to a **running Prefect server**; `flow.py` / `create_blocks.py` default
+`PREFECT_API_URL` to the local server at `http://127.0.0.1:4223/api`. Start one
+once (in a separate shell) if it is not already up:
+
+```bash
+RPI=/gpfs/u/home/QCSC/QCSCnkle/scratch-shared/ek/miniconda3/envs/rpi_demo/bin/python
+"$RPI" -m prefect server start --host 127.0.0.1 --port 4223
+```
+
+Then run the flow (override `PREFECT_API_URL` to point at a different server):
 
 ```bash
 cd /gpfs/u/scratch/QCSC/shared/ek/qcsc-prefect-forked/examples/example_slurm_demo
 RPI=/gpfs/u/home/QCSC/QCSCnkle/scratch-shared/ek/miniconda3/envs/rpi_demo/bin/python
-
-export PREFECT_HOME=/tmp/pf_$USER
-export PREFECT_SERVER_ALLOW_EPHEMERAL_MODE=true
-export PREFECT_API_DATABASE_CONNECTION_URL="sqlite+aiosqlite:///$PREFECT_HOME/prefect.db"
-export PREFECT_SERVER_EPHEMERAL_STARTUP_TIMEOUT_SECONDS=60
-unset PREFECT_PROFILE PREFECT_API_URL
 
 # 1. Dry run — create_blocks → check_env → make_circuit, spend NO QPU shots:
 CIRCUIT_ONLY=1 "$RPI" flow.py
