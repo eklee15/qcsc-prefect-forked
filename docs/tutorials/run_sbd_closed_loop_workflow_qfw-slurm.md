@@ -1,5 +1,14 @@
 # Run the SQD Closed-loop Workflow with SBD on QFw-SLURM (qcsc-prefect)
 
+> **Quantum source configuration:** `quantum_source` now names a saved
+> `QuantumSourceBlock`; its default is `quantum-source`. The block generator saves
+> this Block from the `[source]` table. Set the Block's `config.kind` to `random`,
+> `qrmi` or `qfw` to choose the platform, or pass another saved source Block name.
+> Older values `random`, `real-device` and `qfw` work only after source Blocks with
+> those names are saved. See [Quantum Sources](../howto/howto_use_quantum_source.md)
+> and the [SQD source configuration](https://github.com/qiskit-community/qcsc-prefect/tree/main/algorithms/closed_loop/sqd_de#quantum-sampling).
+
+
 This tutorial demonstrates a Sample-based Quantum Diagonalization (SQD) workflow with the [SBD solver](https://github.com/r-ccs-cms/sbd) in a [QFw-SLURM](https://github.com/openQSE/QFw-SLURM-Cluster#readme) environment. The workflow combines quantum sampling with classical processing and uses SBD to diagonalize a sparse chemistry Hamiltonian in the `QFw-SLURM` environment, with Prefect orchestrating the end-to-end workflow.
 
 For the example in this tutorial, the goal is to compute the ground-state energy of the N₂ molecular system using the SQD workflow.
@@ -42,7 +51,8 @@ The tutorial will cover creating and starting the QFw-SLURM environment, configu
 
 ## Workflow architecture
 
-With `quantum_source="qfw"`, the SQD workflow uses QFw and QRMI for quantum execution and Slurm/MPI for the classical SBD stage.
+With `quantum_source="quantum-source"` and that Block's `config.kind="qfw"`, SQD uses
+QFw and QRMI for quantum execution and Slurm/MPI for the classical SBD stage.
 
 ![QFw-SLURM SQD workflow architecture](../images/img-sbd-qfw-slurm-architecture.png)
 
@@ -230,14 +240,16 @@ uv pip install --no-deps \
   -e packages/qcsc-prefect-core \
   -e packages/qcsc-prefect-adapters \
   -e packages/qcsc-prefect-blocks \
-  -e packages/qcsc-prefect-executor
+  -e packages/qcsc-prefect-executor \
+  -e packages/qcsc-prefect-dice \
+  -e packages/qcsc-prefect-sbd
 ```
 
 Install the workflow utility and SBD packages into the active QFw environment:
 
 ```bash
 uv pip install -e algorithms/qcsc_workflow_utility
-uv pip install -e algorithms/sbd
+uv pip install -e algorithms/closed_loop/sqd_de
 ```
 
 Check the installation:
@@ -306,7 +318,7 @@ The native SBD executable must be built for the architecture and software enviro
 From the qcsc-prefect repository root, navigate to:
 
 ```bash
-cd algorithms/sbd/native
+cd packages/qcsc-prefect-sbd/native
 ```
 
 Build the solver using the Slurm build script:
@@ -343,14 +355,14 @@ mkdir -p /path/to/sbd_jobs
 Create the local Slurm configuration:
 
 ```bash
-cp /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.slurm.example.toml \
-   /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.toml
+cp /path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/sbd_blocks.slurm.example.toml \
+   /path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 Edit the configuration:
 
 ```bash
-vim /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.toml
+vim /path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 Configure the target for the QFw-SLURM environment.
@@ -361,7 +373,7 @@ Configure the target for the QFw-SLURM environment.
 | `project` | `"default"` | Slurm account/project, if required |
 | `queue` | `"normal"` | Slurm partition |
 | `work_dir` | `"/path/to/sbd_jobs"` | Shared job working directory |
-| `sbd_executable` | `"/path/to/qcsc-prefect/algorithms/sbd/native/diag"` | Absolute path to the compiled solver |
+| `sbd_executable` | `"/path/to/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag"` | Absolute path to the compiled solver |
 
 A minimal configuration looks like:
 
@@ -370,7 +382,7 @@ hpc_target = "slurm"
 project = "default"
 queue = "normal"
 work_dir = "/path/to/sbd_jobs"
-sbd_executable = "/path/to/qcsc-prefect/algorithms/sbd/native/diag"
+sbd_executable = "/path/to/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag"
 
 launcher = "srun"
 walltime = "00:15:00"
@@ -400,13 +412,21 @@ For a quick functional test, the low-iteration settings in the example configura
 
 ### Step 8. Generate the Prefect Blocks
 
+Before generating the Blocks, replace the copied Slurm example's `[source]` and
+`[source.config]` tables with the QFw source configuration in the
+[SQD README](https://github.com/qiskit-community/qcsc-prefect/tree/main/algorithms/closed_loop/sqd_de#quantum-sampling).
+Set `name = "quantum-source"`, `block_name = "qfw-runner"`, and an absolute sampler
+script path. The four `sampler_arg_names` entries forward SQD's compilation settings.
+The generator then saves the source Block as well as the classical execution Blocks.
+
+
 Use the Slurm SBD configuration created in the previous step to create the reusable Prefect blocks used by the classical stage of the workflow.
 
 Create the classical execution blocks:
 
 ```bash
-python /path/to/qcsc-prefect/algorithms/sbd/create_blocks.py \
-  --config /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.toml
+python /path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/create_blocks.py \
+  --config /path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 The script creates the reusable configuration needed by `SBDSolverJob`
@@ -523,10 +543,10 @@ Example:
 
 | Field | Value / Example |
 |---|---|
-| FCIDump File | `/path/to/qcsc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
+| FCIDump File | `/path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/data/fcidump_N2_MO.txt` |
 | SQD Subspace Dimension | `10000` |
 | Differential Evolution Iterations | `1` |
-| Quantum Source | `qfw` |
+| Quantum Source Block | `quantum-source` (configured for QFw) |
 | Random Seed | `24` |
 | Solver Block Ref | `sbd_solver_job/davidson-solver` |
 | Reset Mitigation | `false` for direct-access systems where reset-check measurements are unavailable |
@@ -535,7 +555,9 @@ Example:
 >
 > Reset mitigation requires meaningful reset-check measurements from the target quantum system. For direct-access `IBMQuantumSystem` resources where this behavior is not supported or available, set `use_reset_mitigation=false`. Quantum execution through QFw/QRMI is otherwise unaffected.
 >
-> If a quantum device is not immediately available, you can set **Quantum Source** to `random` instead of `qfw`. The `random` option generates sampling data without submitting a job to a quantum device, allowing you to experiment with the SQD workflow and exercise the classical SBD execution path.
+> If a device is unavailable, set the saved source Block's `config.kind` to `random`.
+> Keep **Quantum Source Block** set to `quantum-source`. Synthetic data exercises the
+> classical SBD path without submitting a quantum job.
 >
 > Use `qfw` when you want to validate the complete QFw/QRMI quantum execution path on a configured quantum device.
 
@@ -629,7 +651,7 @@ The `sqd-telemetry` artifact records the energy computed for each walker across 
 When:
 
 ```text
-quantum_source = "qfw"
+quantum_source = "quantum-source"  # the saved source Block has config.kind = "qfw"
 ```
 
 the workflow loads the configured `QFwResource`.
@@ -694,7 +716,7 @@ Install the `qcsc-prefect` workflow packages:
 cd /path/to/qcsc-prefect
 
 uv pip install -e algorithms/qcsc_workflow_utility
-uv pip install -e algorithms/sbd
+uv pip install -e algorithms/closed_loop/sqd_de
 ```
 
 Then verify:

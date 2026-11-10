@@ -1,5 +1,14 @@
 # Run SBD Closed-loop Workflow on Miyabi (qcsc-prefect)
 
+> **Quantum source configuration:** `quantum_source` now names a saved
+> `QuantumSourceBlock`; its default is `quantum-source`. The block generator saves
+> this Block from the `[source]` table. Set the Block's `config.kind` to `random`,
+> `qrmi` or `qfw` to choose the platform, or pass another saved source Block name.
+> Older values `random`, `real-device` and `qfw` work only after source Blocks with
+> those names are saved. See [Quantum Sources](../howto/howto_use_quantum_source.md)
+> and the [SQD source configuration](https://github.com/qiskit-community/qcsc-prefect/tree/main/algorithms/closed_loop/sqd_de#quantum-sampling).
+
+
 This tutorial walks us through reproducing a Sample-based Quantum Diagonalization (SQD) experiment using the `qcsc-prefect` architecture.
 We will run a hybrid quantum-classical workflow using the [SBD](https://github.com/r-ccs-cms/sbd) solver to diagonalize a sparse chemistry Hamiltonian on the Miyabi-C environment, orchestrated via Prefect.
 
@@ -116,10 +125,12 @@ uv pip install --no-deps \
   -e packages/qcsc-prefect-core \
   -e packages/qcsc-prefect-adapters \
   -e packages/qcsc-prefect-blocks \
-  -e packages/qcsc-prefect-executor
+  -e packages/qcsc-prefect-executor \
+  -e packages/qcsc-prefect-dice \
+  -e packages/qcsc-prefect-sbd
 
 uv pip install -e algorithms/qcsc_workflow_utility
-uv pip install -e algorithms/sbd
+uv pip install -e algorithms/closed_loop/sqd_de
 ```
 
 Check that the packages are installed correctly:
@@ -155,7 +166,7 @@ Navigate to the directory and build:
 
 <img src="../images/icon-miyabi.png" alt="miyabi" width="50"/><br>
 ```bash
-cd /work/gz00/z12345/qcsc-prefect/algorithms/sbd/native
+cd /work/gz00/z12345/qcsc-prefect/packages/qcsc-prefect-sbd/native
 bash ./build_sbd.sh
 ```
 
@@ -185,7 +196,7 @@ realpath ./diag
 Example output:
 
 ```text
-/work/gz00/z12345/qcsc-prefect/algorithms/sbd/native/diag
+/work/gz00/z12345/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag
 ```
 
 We will need this path in the next step.
@@ -205,7 +216,7 @@ This approach uses automated block creation via script instead of manual UI edit
 ```bash
 cd /work/gz00/z12345/qcsc-prefect
 mkdir -p /work/gz00/z12345/sbd_jobs
-cp algorithms/sbd/sbd_blocks.example.toml algorithms/sbd/sbd_blocks.toml
+cp algorithms/closed_loop/sqd_de/sbd_blocks.example.toml algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 Update your prefect token (Only On Prem) if your token is expired.
@@ -218,9 +229,9 @@ prefect-auth login
 
 #### 4.2 Edit the configuration file
 
-Edit `algorithms/sbd/sbd_blocks.toml` and set the following parameters.
+Edit `algorithms/closed_loop/sqd_de/sbd_blocks.toml` and set the following parameters.
 ```bash
-vim algorithms/sbd/sbd_blocks.toml
+vim algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 Set at least:
@@ -234,7 +245,7 @@ Set at least:
 | `project` | `gz00` | Your Miyabi project name |
 | `queue` | `regular-c` | Queue name on Miyabi |
 | `work_dir` | `/work/gz00/z12345/sbd_jobs` | Job working directory |
-| `sbd_executable` | `/work/gz00/z12345/qcsc-prefect/algorithms/sbd/native/diag` | Absolute path to diag executable |
+| `sbd_executable` | `/work/gz00/z12345/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag` | Absolute path to diag executable |
 | `mpiprocs` | `8` | Number of MPI processes |
 | `mpi_options` | `["-np", "8"]` | MPI options |
 | `task_comm_size` | `1` | Task communicator size |
@@ -254,7 +265,7 @@ Set at least:
 
 <img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
-python algorithms/sbd/create_blocks.py --config algorithms/sbd/sbd_blocks.toml
+python algorithms/closed_loop/sqd_de/create_blocks.py --config algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 This creates the following blocks (default names):
@@ -317,10 +328,10 @@ In the Prefect console, click **Run** → **Custom run** and set as following. A
 
 | Field | Value / Example |
 |---|---|
-| FCIDump File | `/work/gz00/z12345/qcsc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
+| FCIDump File | `/work/gz00/z12345/qcsc-prefect/algorithms/closed_loop/sqd_de/data/fcidump_N2_MO.txt` |
 | SQD Subspace Dimension (Optional) | `1000000` (start small for testing) |
 | Differential Evolution Iterations (Optional)| `1` (start small for testing) |
-| Quantum Source (Optional) | `real-device` or `random` |
+| Quantum Source Block (Optional) | `quantum-source` |
 | Random Seed (Optional) | `24` |
 | Solver Block Ref | `sbd_solver_job/davidson-solver` |
 
@@ -328,9 +339,10 @@ In the Prefect console, click **Run** → **Custom run** and set as following. A
 - It is a stable entry point for users.
 - HPC details are still resolved through the underlying 3 blocks.
 
-`Quantum Source` controls how SQD obtains bitstrings:
-- `real-device`: use the `QuantumRuntime` block (`ibm-runner`) and submit to IBM Quantum Runtime
-- `random`: skip IBM Quantum and generate deterministic pseudo-random bitstrings with `Random Seed`
+`Quantum Source Block` selects a saved `QuantumSourceBlock`. The Miyabi example
+configures it for QRMI through `qrmi-runtime`. For synthetic samples, set
+`[source.config].kind = "random"` and omit the `[runtime]` tables before generating
+the Blocks. `Random Seed` controls the generated bitstrings.
 
 > [!NOTE]
 > For this tutorial, the number of iterations is set to 1 for a quick test, but feel free to increase it as needed.
@@ -379,7 +391,7 @@ prefect deployment inspect 'riken-sqd-de/riken_sqd_de'
 ```
 
 3) Locate the Flow definition in the repo
-The flow is defined in `algorithms/sbd/sbd/main.py`
+The flow is defined in `algorithms/closed_loop/sqd_de/sbd/main.py`
 
 ### 3.4 What happens in this architecture
 
@@ -417,7 +429,7 @@ Now, we will create a GPU-enabled version.
 For the GPU version, place the binary under:
 
 ```text
-/work/gz00/z12345/qcsc-prefect/algorithms/sbd/native/diag-gpu
+/work/gz00/z12345/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag-gpu
 ```
 
 On the MDX workflow client, copy the prebuilt GPU binary with:
@@ -426,7 +438,7 @@ On the MDX workflow client, copy the prebuilt GPU binary with:
 
 ```bash
 cd /work/gz00/z12345/qcsc-prefect
-cp /large/tutorial/diag-gpu algorithms/sbd/native/
+cp /large/tutorial/diag-gpu packages/qcsc-prefect-sbd/native/
 ```
 
 This tutorial assumes the GPU solver runs with the binary name `diag-gpu`.
@@ -437,11 +449,11 @@ Copy and edit the configuration file:
 
 <img src="../images/icon-mdx.png" alt="mdx" width="50"/><br>
 ```bash
-cp algorithms/sbd/sbd_blocks.toml algorithms/sbd/sbd_blocks_gpu.toml
-vim algorithms/sbd/sbd_blocks_gpu.toml
+cp algorithms/closed_loop/sqd_de/sbd_blocks.toml algorithms/closed_loop/sqd_de/sbd_blocks_gpu.toml
+vim algorithms/closed_loop/sqd_de/sbd_blocks_gpu.toml
 ```
 
-Edit `algorithms/sbd/sbd_blocks_gpu.toml` and change:
+Edit `algorithms/closed_loop/sqd_de/sbd_blocks_gpu.toml` and change:
 
 | Parameter | Value / Example |
 |---|---|
@@ -449,7 +461,7 @@ Edit `algorithms/sbd/sbd_blocks_gpu.toml` and change:
 | `hpc_profile_block_name` | `hpc-miyabi-sbd-gpu` |
 | `solver_block_name` | `davidson-solver-gpu` |
 | `queue` | `regular-g` |
-| `sbd_executable` | `/work/gz00/z12345/qcsc-prefect/algorithms/sbd/native/diag-gpu` |
+| `sbd_executable` | `/work/gz00/z12345/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag-gpu` |
 | `launcher` | `mpirun` |
 | `mpiprocs` | `1` |
 | `modules` | Do not set |
@@ -469,7 +481,7 @@ Edit `algorithms/sbd/sbd_blocks_gpu.toml` and change:
 Run:
 
 ```bash
-python algorithms/sbd/create_blocks.py --config algorithms/sbd/sbd_blocks_gpu.toml
+python algorithms/closed_loop/sqd_de/create_blocks.py --config algorithms/closed_loop/sqd_de/sbd_blocks_gpu.toml
 ```
 
 This creates a GPU block set that can coexist with the CPU block set.

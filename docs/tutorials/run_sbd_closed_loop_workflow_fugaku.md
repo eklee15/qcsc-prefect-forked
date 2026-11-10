@@ -1,5 +1,14 @@
 # Run SBD Closed-loop Workflow on Fugaku (qcsc-prefect)
 
+> **Quantum source configuration:** `quantum_source` now names a saved
+> `QuantumSourceBlock`; its default is `quantum-source`. The block generator saves
+> this Block from the `[source]` table. Set the Block's `config.kind` to `random`,
+> `qrmi` or `qfw` to choose the platform, or pass another saved source Block name.
+> Older values `random`, `real-device` and `qfw` work only after source Blocks with
+> those names are saved. See [Quantum Sources](../howto/howto_use_quantum_source.md)
+> and the [SQD source configuration](https://github.com/qiskit-community/qcsc-prefect/tree/main/algorithms/closed_loop/sqd_de#quantum-sampling).
+
+
 This tutorial walks us through reproducing a Sample-based Quantum Diagonalization (SQD) experiment using the `qcsc-prefect` architecture.
 We will run a hybrid quantum-classical workflow using the [SBD](https://github.com/r-ccs-cms/sbd) solver to diagonalize a sparse chemistry Hamiltonian on Fugaku, orchestrated via Prefect.
 
@@ -120,10 +129,12 @@ uv pip install --no-deps \
   -e packages/qcsc-prefect-core \
   -e packages/qcsc-prefect-adapters \
   -e packages/qcsc-prefect-blocks \
-  -e packages/qcsc-prefect-executor
+  -e packages/qcsc-prefect-executor \
+  -e packages/qcsc-prefect-dice \
+  -e packages/qcsc-prefect-sbd
 
 uv pip install -e algorithms/qcsc_workflow_utility
-uv pip install -e algorithms/sbd
+uv pip install -e algorithms/closed_loop/sqd_de
 ```
 
 
@@ -150,7 +161,7 @@ Navigate to native source and build. This procedure can also be executed on the 
 
 <img src="../images/icon-login-fugaku.png" alt="login" width="70"/>  or  <img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-cd /path/to/work/qcsc-prefect/algorithms/sbd/native
+cd /path/to/work/qcsc-prefect/packages/qcsc-prefect-sbd/native
 bash ./build_sbd_fugaku.sh
 ```
 
@@ -166,7 +177,7 @@ realpath ./diag
 Example output:
 
 ```text
-/path/to/work/qcsc-prefect/algorithms/sbd/native/diag
+/path/to/work/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag
 ```
 
 We will use this path in the next step.
@@ -195,8 +206,8 @@ We will use this path in the next step.
 
 <img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```
-cp algorithms/sbd/sbd_blocks.fugaku.example.toml algorithms/sbd/sbd_blocks.toml
-vim algorithms/sbd/sbd_blocks.toml
+cp algorithms/closed_loop/sqd_de/sbd_blocks.fugaku.example.toml algorithms/closed_loop/sqd_de/sbd_blocks.toml
+vim algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 #### 4.2 Edit the configuration file
@@ -211,7 +222,7 @@ The copied example already contains the Fugaku tutorial baseline:
 - `script_filename = "sbd_solver.pjm"`
 - `metrics_artifact_key = "fugaku-sbd-metrics"`
 
-Edit `algorithms/sbd/sbd_blocks.toml` and update at least:
+Edit `algorithms/closed_loop/sqd_de/sbd_blocks.toml` and update at least:
 
 - `group`
 - `queue`
@@ -225,7 +236,7 @@ Edit `algorithms/sbd/sbd_blocks.toml` and update at least:
 | `group` | `raXXXXXX` | Fugaku Group ID |
 | `queue` | `small` | Fugaku resource group (`rscgrp`) |
 | `work_dir` | `/volxxxxx/mdt6/data/raxxxxx/uxxxxx/sbd_jobs` | Job working directory |
-| `sbd_executable` | `/volxxxxx/mdt6/data/raxxxxx/uxxxxx/qcsc-prefect/algorithms/sbd/native/diag` | Absolute path to executable |
+| `sbd_executable` | `/volxxxxx/mdt6/data/raxxxxx/uxxxxx/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag` | Absolute path to executable |
 | `num_nodes` | `2` | Number of allocated nodes for this tutorial |
 | `launcher` | `mpiexec` | MPI launcher |
 | `mpiprocs` | `2` | Number of MPI processes |
@@ -238,8 +249,8 @@ Edit `algorithms/sbd/sbd_blocks.toml` and update at least:
 
 <img src="../images/icon-prepost-fugaku.png" alt="prepost" width="70"/><br>
 ```bash
-python algorithms/sbd/create_blocks.py \
-  --config algorithms/sbd/sbd_blocks.toml \
+python algorithms/closed_loop/sqd_de/create_blocks.py \
+  --config algorithms/closed_loop/sqd_de/sbd_blocks.toml \
   --hpc-target fugaku
 ```
 
@@ -287,10 +298,10 @@ In the Prefect console, click **Run** → **Custom run** and set at least:
 
 | Field | Value / Example |
 |---|---|
-| FCIDump File | `/path/to/work/qcsc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
+| FCIDump File | `/path/to/work/qcsc-prefect/algorithms/closed_loop/sqd_de/data/fcidump_N2_MO.txt` |
 | SQD Subspace Dimension (Optional) | `1000000` |
 | Differential Evolution Iterations (Optional) | `1` (start small for testing) |
-| Quantum Source (Optional) | `real-device` or `random` |
+| Quantum Source Block (Optional) | `quantum-source` |
 | Random Seed (Optional) | `24` |
 | Solver Block Ref | `sbd_solver_job/davidson-solver` |
 
@@ -349,7 +360,7 @@ prefect deployment inspect 'riken-sqd-de/riken_sqd_de'
 
 3) Locate Flow definition
 
-The flow is defined in `algorithms/sbd/sbd/main.py`.
+The flow is defined in `algorithms/closed_loop/sqd_de/sbd/main.py`.
 
 ### 3.4 What happens in this architecture
 

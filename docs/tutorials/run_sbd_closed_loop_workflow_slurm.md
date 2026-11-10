@@ -1,5 +1,14 @@
 # Run SBD Closed-loop Workflow on Slurm (qcsc-prefect)
 
+> **Quantum source configuration:** `quantum_source` now names a saved
+> `QuantumSourceBlock`; its default is `quantum-source`. The block generator saves
+> this Block from the `[source]` table. Set the Block's `config.kind` to `random`,
+> `qrmi` or `qfw` to choose the platform, or pass another saved source Block name.
+> Older values `random`, `real-device` and `qfw` work only after source Blocks with
+> those names are saved. See [Quantum Sources](../howto/howto_use_quantum_source.md)
+> and the [SQD source configuration](https://github.com/qiskit-community/qcsc-prefect/tree/main/algorithms/closed_loop/sqd_de#quantum-sampling).
+
+
 This tutorial demonstrates a Sample-based Quantum Diagonalization (SQD) workflow 
 using the `qcsc-prefect` architecture. The workflow combines quantum sampling with 
 classical processing and uses the [SBD](https://github.com/r-ccs-cms/sbd) solver to 
@@ -19,12 +28,12 @@ environment.
 > **Tip**
 >
 > You can first validate the classical workflow and Slurm execution path
-> by setting `Quantum Source` to `random`. This does not require IBM
-> Quantum access.
+> with `Quantum Source Block` set to `quantum-source`. The copied Slurm example
+> configures this Block with `config.kind="random"`, which needs no IBM Quantum access.
 >
 > After the classical pipeline is working successfully, you can configure
-> IBM Quantum access and rerun the workflow with `Quantum Source` set to
-> `real-device`.
+> IBM Quantum access, change the source Block to `config.kind="qrmi"` with
+> `config.block_name="qrmi-runtime"`, and rerun with the same source Block name.
 
 
 ## Prerequisites
@@ -34,7 +43,7 @@ Before starting, make sure:
 - You have access to a Slurm cluster with `sbatch` and `srun` available.
 - Python 3.12 and `uv` are available on the Slurm login node.
 - OpenBLAS and an MPI C++ compiler (`mpicxx` or `mpic++`) are available for building the SBD solver.
-- IBM Quantum access is optional for the initial classical workflow test. If you plan to use a real quantum device, complete [How to Set Up IBM Quantum Access Credentials for Prefect on a Local Slurm Setup](../howto/howto_setup_prefect_qiskit_slurm.md).
+- IBM Quantum access is optional for the initial classical test. For a device run, configure a QRMI runtime using the [QRMI Sampler guide](../howto/howto_qrmi_slurm_sampler.md), and reference it from the [Quantum Source Block](../howto/howto_use_quantum_source.md).
 ------------------------------------------------------------------------
 
 ## 0. What changes for Slurm?
@@ -66,8 +75,8 @@ A typical Slurm setup contains three execution contexts:
 -   **Workflow environment** --- runs the Prefect Flow and Python
     workflow logic.
 -   **Slurm compute nodes** --- execute the compiled SBD `diag` binary.
--   **IBM Quantum** --- executes quantum sampling when
-    `quantum_source="real-device"` is selected.
+-   **IBM Quantum** --- executes quantum sampling when the selected source Block
+    has `config.kind="qrmi"` and references an IBM Quantum runtime.
 
 On systems where the workflow environment and Slurm login environment
 are the same machine or share the same filesystem, the repository and
@@ -157,14 +166,16 @@ uv pip install --no-deps \
   -e packages/qcsc-prefect-core \
   -e packages/qcsc-prefect-adapters \
   -e packages/qcsc-prefect-blocks \
-  -e packages/qcsc-prefect-executor
+  -e packages/qcsc-prefect-executor \
+  -e packages/qcsc-prefect-dice \
+  -e packages/qcsc-prefect-sbd
 ```
 
 Install the workflow utility and SBD packages:
 
 ``` bash
 uv pip install -e algorithms/qcsc_workflow_utility
-uv pip install -e algorithms/sbd
+uv pip install -e algorithms/closed_loop/sqd_de
 ```
 
 Check the installation:
@@ -191,7 +202,7 @@ compatible with the Slurm compute nodes where it will run.
 Navigate to the native solver directory:
 
 ``` bash
-cd algorithms/sbd/native
+cd packages/qcsc-prefect-sbd/native
 ```
 
 Run the Slurm build script:
@@ -214,7 +225,7 @@ build is reproducible.
 After a successful build, you should see output similar to:
 
 ``` text
-Build completed: /path/to/qcsc-prefect/algorithms/sbd/native/diag
+Build completed: /path/to/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag
 ```
 
 Verify the executable:
@@ -261,14 +272,14 @@ mkdir -p /path/to/sbd_jobs
 Copy the Slurm example configuration to create your local configuration:
 
 ``` bash
-cp /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.slurm.example.toml \
-   /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.toml
+cp /path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/sbd_blocks.slurm.example.toml \
+   /path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 Edit the local configuration:
 
 ``` bash
-vim /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.toml
+vim /path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 At minimum, configure:
@@ -279,7 +290,7 @@ At minimum, configure:
 | `project` | `"default"` | Slurm account/project, if required |
 | `queue` | `"normal"` | Slurm partition |
 | `work_dir` | `"/path/to/sbd_jobs"` | Shared job working directory |
-| `sbd_executable` | `"/path/to/qcsc-prefect/algorithms/sbd/native/diag"` | Absolute path to the compiled solver |
+| `sbd_executable` | `"/path/to/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag"` | Absolute path to the compiled solver |
 
 A minimal configuration looks like:
 
@@ -288,7 +299,7 @@ hpc_target = "slurm"
 project = "default"
 queue = "normal"
 work_dir = "/path/to/sbd_jobs"
-sbd_executable = "/path/to/qcsc-prefect/algorithms/sbd/native/diag"
+sbd_executable = "/path/to/qcsc-prefect/packages/qcsc-prefect-sbd/native/diag"
 
 launcher = "srun"
 walltime = "00:15:00"
@@ -331,7 +342,7 @@ See [How to Run and Access a Prefect Server on a Slurm Login Node](../howto/howt
 Run the block creation script using the Slurm configuration:
 
 ``` bash
-python /path/to/qcsc-prefect/algorithms/sbd/create_blocks.py --config /path/to/qcsc-prefect/algorithms/sbd/sbd_blocks.toml
+python /path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/create_blocks.py --config /path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 The script creates the reusable configuration needed by `SBDSolverJob`
@@ -448,19 +459,26 @@ For an initial test, use parameters similar to:
 
 | Field | Value / Example |
 |---|---|
-| FCIDump File | `/path/to/qcsc-prefect/algorithms/sbd/data/fcidump_N2_MO.txt` |
+| FCIDump File | `/path/to/qcsc-prefect/algorithms/closed_loop/sqd_de/data/fcidump_N2_MO.txt` |
 | SQD Subspace Dimension | `1000000` |
 | Differential Evolution Iterations | `1` |
-| Quantum Source | `random` or `real-device` |
+| Quantum Source Block | `quantum-source` |
 | Random Seed | `24` |
 | Solver Block Ref | `sbd_solver_job/davidson-solver` |
 
 `Solver Block Ref` selects the `SBDSolverJob` preset used by the
 workflow.
 
-For the initial Slurm integration test, use `random` to validate the classical workflow and Slurm execution path without requiring access to a quantum device.
+For the initial Slurm integration test, keep the source Block's `config.kind="random"`
+and pass `quantum_source="quantum-source"` to the flow. This validates the classical
+workflow and Slurm path without a quantum device.
 
-After validating the Slurm execution path, use `real-device` to run the sampling workload on IBM Quantum using the configured quantum runtime block.
+After validating Slurm execution, replace the `[source.config]` table with
+`kind="qrmi"`, `block_name="qrmi-runtime"` and `tags=["res: quantum"]`, and configure
+the `[runtime]` tables for that referenced runtime (see the
+[SQD source setup](https://github.com/qiskit-community/qcsc-prefect/tree/main/algorithms/closed_loop/sqd_de#quantum-sampling)).
+Run `create_blocks.py` again to save the settings. Keep `quantum_source="quantum-source"`
+in the flow; no new algorithm parameter value is needed.
 
 ------------------------------------------------------------------------
 
@@ -523,7 +541,7 @@ Prefect Blocks.
 Rebuild the native solver:
 
 ``` bash
-cd algorithms/sbd/native
+cd packages/qcsc-prefect-sbd/native
 bash build_sbd_slurm.sh
 ```
 
@@ -593,8 +611,8 @@ prefect block ls
 Then recreate the Blocks if necessary:
 
 ``` bash
-python algorithms/sbd/create_blocks.py \
-  --config algorithms/sbd/sbd_blocks.toml
+python algorithms/closed_loop/sqd_de/create_blocks.py \
+  --config algorithms/closed_loop/sqd_de/sbd_blocks.toml
 ```
 
 ------------------------------------------------------------------------
@@ -607,12 +625,12 @@ validate the Slurm integration in stages:
 1.  Build `diag` successfully.
 2.  Confirm the executable runs on the target Slurm compute environment.
 3.  Create the Slurm Prefect Blocks.
-4.  Run the workflow with a small SQD subspace and
-    `quantum_source="random"`.
+4.  Run with a small SQD subspace, `quantum_source="quantum-source"`, and the
+    source Block's `config.kind="random"`.
 5.  Confirm Slurm submission, job completion and SBD result parsing.
 6.  Inspect the Prefect telemetry artifact.
-7.  Enable `quantum_source="real-device"` after the classical Slurm path
-    is working.
+7.  After the classical path works, change the source Block to `config.kind="qrmi"`
+    and configure its referenced runtime. Keep the same flow parameter value.
 8.  Increase SQD/solver parameters only after the end-to-end workflow is
     stable.
 
